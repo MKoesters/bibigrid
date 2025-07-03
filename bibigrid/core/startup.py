@@ -151,7 +151,7 @@ def run_action(args, configurations, config_path):
 
 @click.command()
 @click.option('-h', '--help', is_flag=True, help='Show this message and exit.')
-@click.option('-v', '--verbose', is_flag=True, help='Enable verbose output.')
+@click.option('-v', '--verbose', help='Enable verbose output.')
 @click.option('-d', '--debug', is_flag=True, help='Enable debug mode.')
 @click.option('-i', '--config-input', type=click.Path(), help='Path to user configuration.')
 @click.option('-di', '--default-config-input', type=click.Path(), help='Path to default configuration.')
