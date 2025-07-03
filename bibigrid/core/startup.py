@@ -15,11 +15,62 @@ from bibigrid.core.actions import check, create, ide, list_clusters, terminate, 
 from bibigrid.core.utility import command_line_interpreter
 from bibigrid.core.utility.handler import configuration_handler, provider_handler
 from bibigrid.core.utility.paths.basic_path import CLUSTER_MEMORY_PATH
-
+import logging
 VERBOSITY_LIST = [logging.WARNING, logging.INFO, logging.DEBUG]
-LOGGER_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
-LOG = logging.getLogger("bibigrid")
-logging.addLevelName(42, "PRINT")
+
+
+
+def setup_logger(
+    name="bibigrid",
+    log_file="bibigrid.log",
+    console_level=None,
+    file_level=logging.DEBUG,
+    logger_format="%(asctime)s [%(levelname)s] %(message)s"
+):
+    """
+    Set up a logger with both console and file handlers, including a custom PRINT level.
+
+    Args:
+        name (str): Logger name.
+        log_file (str): Path to the log file.
+        console_level (int): Logging level for the console handler.
+        file_level (int): Logging level for the file handler.
+        logger_format (str): Log message format.
+
+    Returns:
+        logging.Logger: Configured logger.
+    """
+    PRINT_LEVEL = 42
+    logging.addLevelName(PRINT_LEVEL, "PRINT")
+
+    def print_log(self, message, *args, **kwargs):
+        if self.isEnabledFor(PRINT_LEVEL):
+            self._log(PRINT_LEVEL, message, args, **kwargs)
+    logging.Logger.print = print_log
+
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)  # Allow all messages through
+
+    # Remove existing handlers to avoid duplicate logs
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(console_level)
+    console_handler.setFormatter(logging.Formatter(logger_format))
+
+    # File handler
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(file_level)
+    file_handler.setFormatter(logging.Formatter(logger_format))
+
+    # Add handlers
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    return logger
+
 
 
 def get_cluster_id_from_mem():
@@ -40,19 +91,15 @@ def get_cluster_id_from_mem():
     return None
 
 
-def set_logger_verbosity(verbosity):
+def set_logger_verbosity(logger, verbosity):
     """
     Sets verbosity, format and handler.
     @param verbosity: level of verbosity
     @return:
     """
-
     capped_verbosity = min(verbosity, len(VERBOSITY_LIST) - 1)
-    # LOG.basicConfig(format=LOGGER_FORMAT, level=VERBOSITY_LIST[capped_verbosity],
-    #                    handlers=LOGGING_HANDLER_LIST)
-    LOG.setLevel(VERBOSITY_LIST[capped_verbosity])
-
-    LOG.debug(f"Logging verbosity set to {capped_verbosity}")
+    logger.setLevel(VERBOSITY_LIST[capped_verbosity])
+    logger.debug(f"Logging verbosity set to {capped_verbosity}")
 
 
 # pylint: disable=too-many-nested-blocks,too-many-branches, too-many-statements
@@ -65,47 +112,47 @@ def run_action(args, configurations, config_path):
     @return:
     """
     if args.version:
-        LOG.info("Action version selected")
-        version.version(LOG)
+        logger.info("Action version selected")
+        version.version(logger)
         return 0
 
     start_time = time.time()
     exit_state = 0
     try:
-        providers = provider_handler.get_providers(configurations, LOG)
+        providers = provider_handler.get_providers(configurations, logger)
         if providers:
             if args.list:
-                LOG.info("Action list selected")
-                exit_state = list_clusters.log_list(args.cluster_id, providers, LOG)
+                logger.info("Action list selected")
+                exit_state = list_clusters.log_list(args.cluster_id, providers, logger)
             elif args.check:
-                LOG.info("Action check selected")
-                exit_state = check.check(configurations, providers, LOG)
+                logger.info("Action check selected")
+                exit_state = check.check(configurations, providers, logger)
             elif args.create:
-                LOG.info("Action create selected")
-                creator = create.Create(providers=providers, configurations=configurations, log=LOG, debug=args.debug,
+                logger.info("Action create selected")
+                creator = create.Create(providers=providers, configurations=configurations, log=logger, debug=args.debug,
                                         config_path=config_path)
-                LOG.log(42, "Creating a new cluster takes about 10 or more minutes depending on your cloud provider "
+                logger.log(42, "Creating a new cluster takes about 10 or more minutes depending on your cloud provider "
                             "and your configuration. Please be patient.")
                 exit_state = creator.create()
             else:
                 if not args.cluster_id:
                     args.cluster_id = get_cluster_id_from_mem()
-                    LOG.info("No cid (cluster_id) specified. Defaulting to last created cluster: %s",
+                    logger.info("No cid (cluster_id) specified. Defaulting to last created cluster: %s",
                              args.cluster_id or 'None found')
                 if args.cluster_id:
                     if args.terminate:
-                        LOG.info("Action terminate selected")
-                        exit_state = terminate.terminate(cluster_id=args.cluster_id, providers=providers, log=LOG,
+                        logger.info("Action terminate selected")
+                        exit_state = terminate.terminate(cluster_id=args.cluster_id, providers=providers, log=logger,
                                                          debug=args.debug)
                     elif args.ide:
-                        LOG.info("Action ide selected")
-                        exit_state = ide.ide(args.cluster_id, providers[0], configurations[0], LOG)
+                        logger.info("Action ide selected")
+                        exit_state = ide.ide(args.cluster_id, providers[0], configurations[0], logger)
                     elif args.update:
-                        LOG.info("Action update selected")
-                        creator = create.Create(providers=providers, configurations=configurations, log=LOG,
+                        logger.info("Action update selected")
+                        creator = create.Create(providers=providers, configurations=configurations, log=logger,
                                                 debug=args.debug,
                                                 config_path=config_path, cluster_id=args.cluster_id)
-                        exit_state = update.update(creator, LOG)
+                        exit_state = update.update(creator, logger)
             for provider in providers:
                 provider.close()
         else:
@@ -113,12 +160,12 @@ def run_action(args, configurations, config_path):
     except Exception as err:  # pylint: disable=broad-except
         if args.debug:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            LOG.error("".join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
+            logger.error("".join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
         else:
-            LOG.error(err)
+            logger.error(err)
         exit_state = 2
     time_in_s = time.time() - start_time
-    LOG.log(42, f"--- {math.floor(time_in_s / 60)} minutes and {round(time_in_s % 60, 2)} seconds ---")
+    logger.log(42, f"--- {math.floor(time_in_s / 60)} minutes and {round(time_in_s % 60, 2)} seconds ---")
     return exit_state
 
 
@@ -149,9 +196,12 @@ def run_action(args, configurations, config_path):
 # if __name__ == "__main__":
 #     main()
 
+logger = setup_logger(console_level=1)
+set_logger_verbosity(logger, 1)
+
 @click.command()
 @click.option('-h', '--help', is_flag=True, help='Show this message and exit.')
-@click.option('-v', '--verbose', help='Enable verbose output.')
+@click.option('-v', '--verbosity', type=int, default=1, help='Verbosity level')
 @click.option('-d', '--debug', is_flag=True, help='Enable debug mode.')
 @click.option('-i', '--config-input', type=click.Path(), help='Path to user configuration.')
 @click.option('-di', '--default-config-input', type=click.Path(), help='Path to default configuration.')
@@ -164,13 +214,15 @@ def run_action(args, configurations, config_path):
 @click.option('-ch', '--check', is_flag=True, help='Check cluster.')
 @click.option('-ide', '--ide', is_flag=True, help='IDE mode.')
 @click.option('-u', '--update', is_flag=True, help='Update cluster.')
-def main(help, verbose, debug, config_input, default_config_input, enforced_config_input, cluster_id,
+def main(help, verbosity, debug, config_input, default_config_input, enforced_config_input, cluster_id,
          version, terminate, create, list, check, ide, update):
     """
     Interprets command line, sets logger, reads configuration and runs selected action. Then exits.
     """
-    logging.basicConfig(format=LOGGER_FORMAT)
-    LOG.addHandler(logging.FileHandler("bibigrid.log"))
+    # logging.basicConfig(format=LOGGER_FORMAT)
+    # LOG.addHandler(logging.FileHandler("bibigrid.log"))
+    # breakpoint()
+    # logger = setup_logger(console_level=verbosity)
 
     # Enforce that exactly one action is selected
     actions = [version, terminate, create, list, check, ide, update]
@@ -179,10 +231,10 @@ def main(help, verbose, debug, config_input, default_config_input, enforced_conf
         ctx = click.get_current_context()
         ctx.fail("One (and only one) of the arguments -V/--version -t/--terminate -c/--create -l/--list -ch/--check -ide/--ide -u/--update is required")
 
-    set_logger_verbosity(verbose)
+    # set_logger_verbosity(logger, verbosity)
 
     # Replace with your actual configuration handler
-    configurations = configuration_handler.read_configuration(LOG, config_input)
+    configurations = configuration_handler.read_configuration(logger, config_input)
     if not configurations:
         sys.exit(1)
 
@@ -194,7 +246,7 @@ def main(help, verbose, debug, config_input, default_config_input, enforced_conf
         user_config=configurations,
         default_config_path=default_config_input,
         enforced_config_path=enforced_config_input,
-        log=LOG
+        log=logger
     )
 
     args = SimpleNamespace(
@@ -209,7 +261,7 @@ def main(help, verbose, debug, config_input, default_config_input, enforced_conf
         check=check,
         ide=ide,
         update=update,
-        verbose=verbose,
+        verbose=verbosity,
         debug=debug
     )
 
