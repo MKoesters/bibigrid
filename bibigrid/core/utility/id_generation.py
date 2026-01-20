@@ -7,7 +7,7 @@ import shortuuid
 from bibigrid.core.utility.statics.create_statics import MASTER_IDENTIFIER, VPNGTW_IDENTIFIER, WORKER_IDENTIFIER
 
 MAX_ID_LENGTH = 15
-CLUSTER_UUID_ALPHABET = '0123456789abcdefghijkmnopqrstuvwxyz'
+CLUSTER_UUID_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz'
 
 
 def generate_cluster_id():
