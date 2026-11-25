@@ -626,7 +626,7 @@ class Create:  # pylint: disable=too-many-instance-attributes,too-many-arguments
                     slots[index] = (worker, worker.get("onDemand", True), configuration, provider)
                     index += 1
 
-        desired_names_by_index = {i: WORKER_IDENTIFIER(cluster_id=self.cluster_id, additional=i) for i in slots}
+        desired_names_by_index = {i: worker_identifier(cluster_id=self.cluster_id, additional=i) for i in slots}
         desired_names = set(desired_names_by_index.values())
         actual_names = {worker["name"] for worker in cluster.get("workers", [])}
 
@@ -673,7 +673,7 @@ class Create:  # pylint: disable=too-many-instance-attributes,too-many-arguments
             if not (master_ip and ssh_user and used_private_key):
                 raise ConfigurationException(
                     "Unable to determine master_ip, ssh_user or private key of the running cluster. Aborting.")
-            server = self.providers[0].get_server(MASTER_IDENTIFIER(cluster_id=self.cluster_id))
+            server = self.providers[0].get_server(master_identifier(cluster_id=self.cluster_id))
             if not server:
                 raise ConfigurationException(f"Master of cluster {self.cluster_id} not found. Aborting.")
             self.master_ip = master_ip
@@ -711,7 +711,7 @@ class Create:  # pylint: disable=too-many-instance-attributes,too-many-arguments
             to_create = self.compute_worker_diff(cluster)
             for worker, index, configuration, provider in to_create:
                 self.start_worker(worker, index, configuration, provider)
-                new_worker_names.append(WORKER_IDENTIFIER(cluster_id=self.cluster_id, additional=index))
+                new_worker_names.append(worker_identifier(cluster_id=self.cluster_id, additional=index))
 
             self.upload_data(used_private_key, clean_playbook=True)
             if new_worker_names:
@@ -754,7 +754,7 @@ class Create:  # pylint: disable=too-many-instance-attributes,too-many-arguments
         for name in new_worker_names:
             server = self.providers[0].get_server(name)
             if server:
-                terminate_server(self.providers[0], server, self.log)
+                terminate_server(self.providers[0], server, True, self.log)
         write_cluster_state({"cluster_id": self.cluster_id, "ssh_user": self.ssh_user,
                              "floating_ip": self.master_ip, "state": "failed",
                              "message": "Cluster growth failed. Existing infrastructure left untouched."})
